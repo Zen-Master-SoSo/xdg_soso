@@ -1,6 +1,6 @@
 # xdg_soso
 
-Installs a python script as an application on xdg compliant shells.
+Installs a python script as an application on XDG compliant shells.
 
 ## Installation
 
@@ -13,14 +13,14 @@ $ pip install xdg_soso
 In your python application:
 
 ```python
-import xdg_soso
+from xdg_soso import XDGSetup
 ```
 
 Create an instance of XDGSetup:
 
 ```
 xdg = XDGSetup(__package__, "MyModule")
-xdg.comment = __doc__
+xdg.comment = __doc__	# For example
 ```
 
 Install your application:
@@ -35,6 +35,8 @@ You need at a bare minumum the module name. A "friendly name" is nice to have,
 but if you don't provide it, the module name will be used.
 
 It's probably a good idea to include an application icon, as well.
+
+-----
 
 The attributes which you can set include:
 
@@ -85,10 +87,7 @@ Creates a mime_type for files associated with your application.
 
 Some examples:
 
-	font/ttf
-	audio/flac
-	application/zip
-	application/x-rzip
+> font/ttf, audio/flac, application/zip, application/x-rzip
 
 * glob_pattern
 
