@@ -30,7 +30,7 @@ from xml.etree.ElementTree import Element
 from tempfile import mkstemp
 from subprocess import run, CalledProcessError
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 
 
 def is_xdg():
