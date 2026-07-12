@@ -18,7 +18,7 @@
 #  MA 02110-1301, USA.
 #
 """
-This module provides the "XDGSetup" class for installing your python script as
+This module provides the "XDGSetup" class for installing your package as
 a userspace application on xdg compliant shells.
 """
 import logging
@@ -33,9 +33,19 @@ from subprocess import run, CalledProcessError
 __version__ = "0.1.1"
 
 
+def is_xdg():
+	"""
+	Checks that this is running on an XDG -compliant system
+	"""
+	for var in ['XDG_CONFIG_DIRS', 'XDG_DATA_DIRS']:
+		if getenv(var):
+			return True
+	return _run(['which', 'update-desktop-database']).returncode == 0
+
+
 def _run(*args):
 	logging.debug(args)
-	run(*args, check = True)
+	return run(*args, check = True)
 
 
 class XDGSetup:
@@ -82,15 +92,8 @@ class XDGSetup:
 			Path('mime') / 'packages',
 			self.module_name + '.xml')
 
-	@classmethod
-	def is_xdg(cls):
-		"""
-		Checks that this is running on an XDG -compliant system
-		"""
-		for var in ['XDG_CONFIG_DIRS', 'XDG_DATA_DIRS']:
-			if getenv(var):
-				return True
-		return False
+	def installed(self):
+		return self.desktop_file.exists()
 
 	def install(self):
 		if self.application_icon:
@@ -171,7 +174,11 @@ Type=Application
 		_run([ 'update-mime-database', self._shared_dir('mime') ])
 
 	def update_icon_caches(self):
-		_run([ 'update-icon-caches', self._shared_dir('icons') / '*' ])
+		for path in [
+			Path('icons') / 'hicolor' / 'scalable' / 'apps',
+			Path('icons') / 'hicolor' / 'scalable' / 'mimetypes'
+		]:
+			_run([ 'update-icon-caches', self._shared_dir(path) ])
 
 	def uninstall(self):
 		_run([ 'xdg-mime', 'uninstall', self.mime_xml_file])
