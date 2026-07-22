@@ -30,7 +30,7 @@ from xml.etree.ElementTree import Element
 from tempfile import mkstemp
 from subprocess import run, CalledProcessError
 
-__version__ = "0.3.0"
+__version__ = "1.0.0"
 
 
 def _check(attrib, value, type_, list_elem_type = None):
