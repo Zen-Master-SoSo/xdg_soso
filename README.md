@@ -2,6 +2,10 @@
 
 Installs a python script as an application on XDG compliant shells.
 
+Installation is done for the current user in the user's home directory. Root
+access is not needed. THIS DOES NOT INSTALL A PYTHON APPLICATION SYSTEM-WIDE -
+just in the user's home directory.
+
 ## Installation
 
 ```bash
@@ -32,9 +36,10 @@ xdg.install()
 ## Attributes
 
 You need at a bare minumum the module name. A "friendly name" is nice to have,
-but if you don't provide it, the module name will be used.
-
-It's probably a good idea to include an application icon, as well.
+but if you don't provide it, the module name will be used. It's probably a good
+idea to include an application icon, as well. There are two properties which
+you can use to set an application icon: "application_icon" and "generic_icon".
+(See below)
 
 -----
 
@@ -42,7 +47,7 @@ The attributes which you can set include:
 
 * comment
 
-Displays in applications like Dash and your file explorer.
+What will be displayed in desktop applications like Dash or your file explorer.
 
 * keywords
 
@@ -79,23 +84,71 @@ XFCE
 
 * application_icon
 
-The icon which will be displayed in the task bar / switcher.
+A file path to a custom icon which will be displayed in the task bar /
+switcher. For example:
+
+```python
+xdg = XDGSetup('my_package', 'My Package Name')
+xdg.application_icon = join(dirname(__file__), 'application-icon.svg')
+```
+
+* generic_icon
+
+The NAME of a generic icon which you want to be displayed in the task bar /
+switcher. Some generic icon names include:
+
+> help-about, media-playback-start, document-print, emblem-important,
+applications-graphics, x-office-calendar
+
+You can use one of the generic icons like so:
+
+```python
+xdg = XDGSetup('my_package', 'My Package Name')
+xdg.generic_icon = 'x-office-calendar'
+```
 
 * mime_type
 
-Creates a mime_type for files associated with your application.
+Creates a NEW mime_type for files associated with your application. This
+mime_type will be registered on the target system.
 
-Some examples:
+Some (fake) examples:
 
-> font/ttf, audio/flac, application/zip, application/x-rzip
+> application/my-foo, audio/my-custom-codec, text/my-text-type
 
 * glob_pattern
 
 Provide this along with "mime_type" in order to have files which match
 the pattern associated with your application.
 
+For example:
+
+```python
+xdg = XDGSetup('foo', 'Foo package')
+xdg.mime_type = 'application/x-foo'
+xdg.glob_pattern = '*.foo'
+```
+
 * file_icon
 
 The icon which will be used by the file manager to decorate files which should
-be associated with your application using the given "mime_type".
+be associated with your application using the "mime_type" declared for your
+application's files.
 
+In order to use this feature, you must decide on a mime_type name and set the
+"mime_type" attribute on the installer to what you have decided. (See
+"mime_type" and "glob_pattern" above)
+
+### Complete example:
+
+```python
+xdg = XDGSetup('my_package', 'Name To Call It')
+xdg.comment = "A concise description of my project."
+xdg.mime_type = 'x-application/foo'
+xdg.glob_pattern = '*.foo'
+xdg.application_icon = join(dirname(__file__), 'application-icon.svg')
+xdg.file_icon = join(dirname(__file__), 'file-icon.svg')
+xdg.categories = ['Utilities']
+xdg.keywords = ['Foo', 'Player', 'Viewer']
+xdg.install()
+```

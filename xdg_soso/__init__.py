@@ -57,6 +57,7 @@ class XDGSetup:
 	keywords = None
 	categories = None
 	application_icon = None
+	generic_icon = None
 	mime_type = None
 	glob_pattern = None
 	file_icon = None
@@ -98,16 +99,15 @@ class XDGSetup:
 	def install(self):
 		if self.application_icon:
 			copy2(self.application_icon, self.app_icon_file)
-		if self.application_icon or self.file_icon:
-			self.update_icon_caches()
 		self.make_desktop_file()
 		if self.mime_type:
 			self.make_mime_type()
 			if self.file_icon:
 				copy2(self.file_icon, self.file_icon_file)
-				self.update_icon_caches()
 			if self.glob_pattern:
 				self.set_mime_default()
+		if self.application_icon or self.file_icon:
+			self.update_icon_caches()
 		self.update_desktop_database()
 
 	def make_desktop_file(self):
@@ -122,6 +122,8 @@ Type=Application
 			content += f'Comment={self.comment}{linesep}'
 		if self.application_icon:
 			content += f'Icon={self.module_name}{linesep}'
+		if self.generic_icon:
+			content += f'Icon={self.generic_icon}{linesep}'
 		if self.keywords:
 			keywords = ';'.join(self.keywords) + ';'
 			content += f'Keywords={keywords}{linesep}'
