@@ -22,7 +22,7 @@ This module provides the "XDGSetup" class for installing your package as
 a userspace application on xdg compliant shells.
 """
 import logging
-from os import linesep, unlink, getenv
+from os import unlink, getenv
 from shutil import copy2
 from pathlib import Path
 import xml.etree.ElementTree as et
@@ -33,6 +33,14 @@ from subprocess import run, CalledProcessError
 __version__ = "0.3.0"
 
 
+def _check(attrib, value, type_, list_elem_type = None):
+	if not isinstance(value, type_):
+		raise ValueError(f'Incorrect type for "{attrib}": "{type(value).__name__}"')
+	if type_ is list and value:
+		for elem in value:
+			if not isinstance(elem, list_elem_type):
+				raise ValueError(f'Incorrect type for "{attrib}": "{type(elem).__name__}"')
+
 def is_xdg():
 	"""
 	Checks that this is running on an XDG -compliant system
@@ -40,101 +48,233 @@ def is_xdg():
 	for var in ['XDG_CONFIG_DIRS', 'XDG_DATA_DIRS']:
 		if getenv(var):
 			return True
-	return _run(['which', 'update-desktop-database']).returncode == 0
+	return run(['which', 'update-desktop-database']).returncode == 0
 
 
-def _run(*args):
-	logging.debug(args)
-	return run(*args, check = True)
+class XDGMime:
+	"""
+	Encapsulates a mime type, associating it with a glob pattern
+	"""
 
+	def __init__(self, name, glob_pattern = None, *, comment = None, subclass_of = None):
+		self._name = name
+		self._glob_pattern = glob_pattern
+		self._comment = comment
+		self._subclass_of = subclass_of
+
+	def __str__(self):
+		return self._name
+
+	def __repr__(self):
+		return f'<XDGMime "{self._name}">'
+
+	def append_xml_elem(self, root_node, module_name = None):
+		elem = et.SubElement(root_node, 'mime-type')
+		elem.attrib['type'] = self._name
+		if self._comment:
+			el = et.SubElement(elem, 'comment')
+			el.text = self._comment
+		if self._glob_pattern:
+			el = et.SubElement(elem, 'glob')
+			el.attrib['pattern'] = self._glob_pattern
+		if self._subclass_of:
+			el = et.SubElement(elem, 'sub-class-of')
+			el.attrib['type'] = self._subclass_of
+		if module_name:
+			el = et.SubElement(elem, 'generic-icon')
+			el.attrib['name'] = module_name
 
 class XDGSetup:
 	"""
 	Installs your package as a userspace application on XDG compliant shells.
 	"""
 
-	comment = None
-	keywords = None
-	categories = None
-	application_icon = None
-	generic_icon = None
-	mime_type = None
-	glob_pattern = None
-	file_icon = None
-
-	quiet = False
-	root_path = None		# For testing - fakeout XDG paths
-
-	def __init__(self, module_name, name = None):
+	def __init__(self, module_name, name = None, *, root_path = None):
+		"""
+		"root_path" is for testing: files will be saved in root_path/share/... instead
+		of $HOME/.local/share/...
+		"""
 		self.module_name = module_name
 		self.name = name or module_name
+		self._modify_system = root_path is None
+		self._root_path = Path(root_path) if root_path else (Path.home() / '.local' / 'share')
+		# Properties:
+		self._comment = None
+		self._keywords = None
+		self._categories = None
+		self._application_icon = None
+		self._generic_icon = None
+		self._mime_types = []
+		self._custom_mime_type = None
+		self._file_icon = None
+		# Temp file:
+		self._mime_xml_temp = None
+
+	# ----------------------
+	# Properties set by user
+
+	@property
+	def comment(self):
+		return self._comment
+
+	@comment.setter
+	def comment(self, value):
+		_check('comment', value, str)
+		self._comment = value
+
+	@property
+	def keywords(self):
+		return self._keywords
+
+	@keywords.setter
+	def keywords(self, value):
+		_check('keywords', value, list, str)
+		self._keywords = value
+
+	@property
+	def categories(self):
+		return self._categories
+
+	@categories.setter
+	def categories(self, value):
+		_check('categories', value, list, str)
+		self._categories = value
+
+	@property
+	def application_icon(self):
+		return self._application_icon
+
+	@application_icon.setter
+	def application_icon(self, value):
+		_check('application_icon', value, (str, Path))
+		self._application_icon = value
+
+	@property
+	def generic_icon(self):
+		return self._generic_icon
+
+	@generic_icon.setter
+	def generic_icon(self, value):
+		_check('generic_icon', value, (str, Path))
+		self._generic_icon = value
+
+	@property
+	def mime_types(self):
+		return self._mime_types
+
+	@mime_types.setter
+	def mime_types(self, value):
+		_check('mime_types', value, list, XDGMime)
+		self._mime_types = value
+
+	@property
+	def custom_mime_type(self):
+		return self._custom_mime_type
+
+	@custom_mime_type.setter
+	def custom_mime_type(self, value):
+		_check('custom_mime_type', value, XDGMime)
+		self._custom_mime_type = value
+
+	@property
+	def file_icon(self):
+		return self._file_icon
+
+	@file_icon.setter
+	def file_icon(self, value):
+		_check('file_icon', value, (str, Path))
+		self._file_icon = value
+
+	# --------------------------------
+	# More property setting functions:
+
+	def append_mime_type(self, mime_type):
+		_check('mime_type', mime_type, XDGMime)
+		self.mime_types.append(mime_type)
+
+	# -------------------------------------------
+	# Paths returned from standard user locations
 
 	@property
 	def desktop_file(self):
-		return self._file(
-			Path('applications'),
-			self.module_name + '.desktop')
+		return self._check_path(self._root_path / 'applications' / (
+			self.module_name + '.desktop'))
 
 	@property
 	def app_icon_file(self):
-		return self._file(
-			Path('icons') / 'hicolor' / 'scalable' / 'apps',
-			self.module_name + Path(self.application_icon).suffix)
+		return self._check_path(self._icon_path() / 'apps' / (
+			self.module_name + Path(self._application_icon).suffix))
 
 	@property
 	def file_icon_file(self):
-		return self._file(
-			Path('icons') / 'hicolor' / 'scalable' / 'mimetypes',
-			self.mime_type.replace('/', '-') + Path(self.file_icon).suffix)
+		return self._check_path(self._icon_path() / 'mimetypes' / (
+			self._custom_mime_type.replace('/', '-') + Path(self._file_icon).suffix))
 
 	@property
 	def mime_xml_file(self):
-		return self._file(
-			Path('mime') / 'packages',
-			self.module_name + '.xml')
+		return self._check_path(self._root_path / 'mime' / 'packages' / (
+			self.module_name + '.xml'))
+
+	def _icon_path(self):
+		return self._root_path / 'icons' / 'hicolor' / 'scalable'
+
+	def _check_path(self, path):
+		if not path.parent.exists():
+			if self._modify_system:
+				raise SystemError(f'Required directory "{path.parent}" not found')
+			path.parent.mkdir(parents = True)
+		return path
+
+	# -----------------------
+	# Installation functions:
 
 	def installed(self):
 		return self.desktop_file.exists()
 
 	def install(self):
-		if self.application_icon:
-			copy2(self.application_icon, self.app_icon_file)
+		if self._application_icon:
+			copy2(self._application_icon, self.app_icon_file)
 		self.make_desktop_file()
-		if self.mime_type:
-			self.make_mime_type()
-			if self.file_icon:
-				copy2(self.file_icon, self.file_icon_file)
-			if self.glob_pattern:
+		if self._mime_types or self._custom_mime_type:
+			self.make_mime_xml_file()
+			self.xdg_mime_install()
+			if self._custom_mime_type:
 				self.set_mime_default()
-		if self.application_icon or self.file_icon:
+		if self._file_icon:
+			copy2(self._file_icon, self.file_icon_file)
+		if self._application_icon or self._file_icon:
 			self.update_icon_caches()
 		self.update_desktop_database()
 
 	def make_desktop_file(self):
-		content = f"""[Desktop Entry]
+		with open(str(self.desktop_file), 'w', encoding = 'utf-8') as fob:
+			fob.write(f"""[Desktop Entry]
 Version=1.0
 Name={self.name}
 Exec=/usr/bin/python3 -m {self.module_name}
 Terminal=false
 Type=Application
-"""
-		if self.comment:
-			content += f'Comment={self.comment}{linesep}'
-		if self.application_icon:
-			content += f'Icon={self.module_name}{linesep}'
-		if self.generic_icon:
-			content += f'Icon={self.generic_icon}{linesep}'
-		if self.keywords:
-			keywords = ';'.join(self.keywords) + ';'
-			content += f'Keywords={keywords}{linesep}'
-		if self.categories:
-			categories = ';'.join(self.categories) + ';'
-			content += f'Categories={categories}{linesep}'
-		if self.mime_type:
-			content += f'MimeType={self.mime_type}{linesep}'
-		self.desktop_file.write_text(content, encoding = 'utf-8')
+""")
+			if self.comment:
+				fob.write(f'Comment={self._comment}\n')
+			if self._application_icon:
+				fob.write(f'Icon={self.module_name}\n')
+			if self._generic_icon:
+				fob.write(f'Icon={self._generic_icon}\n')
+			if self._keywords:
+				string = ';'.join(self._keywords) + ';'
+				fob.write(f'Keywords={string}\n')
+			if self._categories:
+				string = ';'.join(self._categories) + ';'
+				fob.write(f'Categories={string}\n')
+			if self._mime_types or self._custom_mime_type:
+				string = ';'.join(str(mime_type) for mime_type in self._mime_types)
+				if self._custom_mime_type:
+					string = f'{self._custom_mime_type};' + string
+				fob.write(f'MimeType={string};\n')
+		self.desktop_file.chmod(0o755)
 
-	def make_mime_type(self):
+	def make_mime_xml_file(self):
 		"""
 		Make a mime_type xml file.
 		"""
@@ -142,65 +282,56 @@ Type=Application
 		tree = et.ElementTree(et.fromstring(
 			'<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info"/>'))
 		root = tree.getroot()
-		mimetype = et.SubElement(root, 'mime-type')
-		mimetype.attrib['type'] = self.mime_type
-		if self.comment:
-			el = et.SubElement(mimetype, 'comment')
-			el.text = self.comment
-		if self.glob_pattern:
-			el = et.SubElement(mimetype, 'glob')
-			el.attrib['pattern'] = self.glob_pattern
-		if self.application_icon:
-			el = et.SubElement(mimetype, 'generic-icon')
-			el.attrib['name'] = self.module_name
-		fh, filename = mkstemp(prefix = 'mimetype-', suffix = '.xml')
-		try:
-			tree.write(fh, xml_declaration = True, encoding = 'utf-8')
-		except Exception as e:
-			raise e
-		else:
-			if self.root_path:
-				copy2(filename, self.mime_xml_file)
-			else:
-				_run([ 'xdg-mime', 'install', filename ])
-		finally:
-			unlink(filename)
+		if self._custom_mime_type:
+			self._custom_mime_type.append_xml_elem(root, self.module_name)
+		for mime_type in self._mime_types:
+			mime_type.append_xml_elem(root)
+		fh, self._mime_xml_temp = mkstemp(prefix = 'xdg-mime-', suffix = '.xml')
+		tree.write(fh, xml_declaration = True, encoding = 'utf-8')
+		if not self._modify_system:
+			copy2(self._mime_xml_temp, self.mime_xml_file)
+
+	# ------------
+	# XDG commands
+
+	def xdg_mime_install(self):
+		self._run([ 'xdg-mime', 'install', self._mime_xml_temp ])
+		unlink(self._mime_xml_temp)
 
 	def set_mime_default(self):
-		_run([ 'xdg-mime', 'default', self.desktop_file.name, self.mime_type ])
+		self._run([ 'xdg-mime', 'default', self.desktop_file.name, str(self._custom_mime_type) ])
 
 	def update_desktop_database(self):
-		_run([ 'update-desktop-database', self._shared_dir('applications') ])
+		self._run([ 'update-desktop-database', self._shared_dir('applications') ])
 
 	def update_mime_database(self):
-		_run([ 'update-mime-database', self._shared_dir('mime') ])
+		self._run([ 'update-mime-database', self._shared_dir('mime') ])
 
 	def update_icon_caches(self):
 		for path in [
 			Path('icons') / 'hicolor' / 'scalable' / 'apps',
 			Path('icons') / 'hicolor' / 'scalable' / 'mimetypes'
 		]:
-			_run([ 'update-icon-caches', self._shared_dir(path) ])
+			self._run([ 'update-icon-caches', self._shared_dir(path) ])
 
 	def uninstall(self):
-		_run([ 'xdg-mime', 'uninstall', self.mime_xml_file])
-		unlink(self.mime_xml_file)
+		self._run([ 'xdg-mime', 'uninstall', self.mime_xml_file])
 		unlink(self.app_icon_file)
 		unlink(self.file_icon_file)
 		unlink(self.desktop_file)
 		self.update_mime_database()
 		self.update_icon_caches()
 
-	def _shared_dir(self, subpath):
-		return (self.root_path or Path.home()) / '.local' / 'share' / subpath
+	# ----------------
+	# Helper functions
 
-	def _file(self, subpath, name):
-		dirpath = self._shared_dir(subpath)
-		try:
-			dirpath.mkdir(parents = True)
-		except FileExistsError:
-			pass
-		return dirpath / name
+	def _shared_dir(self, subpath):
+		return (self._root_path or Path.home()) / subpath
+
+	def _run(self, *args):
+		logging.debug(args)
+		if self._modify_system:
+			run(*args, check = True)
 
 
 #  end xdg_soso/xdg_soso/__init__.py
