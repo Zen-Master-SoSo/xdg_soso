@@ -107,27 +107,9 @@ xdg = XDGSetup('my_package', 'My Package Name')
 xdg.generic_icon = 'x-office-calendar'
 ```
 
-* mime_type
+* mime_types
 
-Creates a NEW mime_type for files associated with your application. This
-mime_type will be registered on the target system.
-
-Some (fake) examples:
-
-> application/my-foo, audio/my-custom-codec, text/my-text-type
-
-* glob_pattern
-
-Provide this along with "mime_type" in order to have files which match
-the pattern associated with your application.
-
-For example:
-
-```python
-xdg = XDGSetup('foo', 'Foo package')
-xdg.mime_type = 'application/x-foo'
-xdg.glob_pattern = '*.foo'
-```
+A list of XDGMime objects which define which mime_types to associate with your program.
 
 * file_icon
 
