@@ -28,7 +28,7 @@ from pathlib import Path
 import xml.etree.ElementTree as et
 from xml.etree.ElementTree import Element
 from tempfile import gettempdir
-from subprocess import run, CalledProcessError
+from subprocess import run
 
 __version__ = "1.0.1"
 
@@ -97,6 +97,7 @@ class XDGSetup:
 		self.module_name = module_name
 		self.name = name or module_name
 		self._root_path = Path.home() / '.local' / 'share'
+		self._modify_system = True
 		# Properties:
 		self._comment = None
 		self._vendor_name = None
@@ -394,10 +395,16 @@ Type=Application
 			self._run([ 'update-icon-caches', self._shared_dir(path) ])
 
 	def uninstall(self):
-		self._run([ 'xdg-mime', 'uninstall', self.mime_xml_file])
-		unlink(self.app_icon_file)
-		unlink(self.file_icon_file)
-		unlink(self.desktop_file)
+		try:
+			self._run([ 'xdg-mime', 'uninstall', self.mime_xml_file])
+		except RuntimeError as err:
+			logging.error(err)
+		if self._application_icon and self.app_icon_file.exists():
+			unlink(self.app_icon_file)
+		if self._file_icon and self.file_icon_file.exists():
+			unlink(self.file_icon_file)
+		if self.desktop_file.exists():
+			unlink(self.desktop_file)
 		self._update_mime_database()
 		self._update_icon_caches()
 
@@ -410,7 +417,9 @@ Type=Application
 	def _run(self, *args):
 		logging.debug(args)
 		if self._modify_system:
-			run(*args, check = True)
+			cp = run(*args, capture_output = True)
+			if cp.returncode != 0:
+				raise RuntimeError(cp.stderr)
 
 
 #  end xdg_soso/xdg_soso/__init__.py
