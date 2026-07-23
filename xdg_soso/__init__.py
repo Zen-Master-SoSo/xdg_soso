@@ -30,7 +30,7 @@ from xml.etree.ElementTree import Element
 from tempfile import gettempdir
 from subprocess import run
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 
 def _check(attrib, value, type_, list_elem_type = None):
