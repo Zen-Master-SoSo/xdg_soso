@@ -22,7 +22,7 @@ This module provides the "XDGSetup" class for installing your package as
 a userspace application on xdg compliant shells.
 """
 import logging
-from os import unlink, getenv
+from os import unlink, getenv, getlogin
 from shutil import copy2
 from pathlib import Path
 import xml.etree.ElementTree as et
@@ -48,7 +48,7 @@ def is_xdg():
 	for var in ['XDG_CONFIG_DIRS', 'XDG_DATA_DIRS']:
 		if getenv(var):
 			return True
-	return run(['which', 'update-desktop-database']).returncode == 0
+	return run(['which', 'update-desktop-database'], check = False).returncode == 0
 
 
 class XDGMime:
@@ -321,6 +321,7 @@ class XDGSetup:
 			copy2(self._file_icon, self.file_icon_file)
 		if self._application_icon or self._file_icon:
 			self._update_icon_caches()
+		print(f'Successfully installed {self.name} for {getlogin()} on this machine.')
 
 	def _make_desktop_file(self):
 		with open(str(self.desktop_file), 'w', encoding = 'utf-8') as fob:
@@ -407,6 +408,7 @@ Type=Application
 			unlink(self.desktop_file)
 		self._update_mime_database()
 		self._update_icon_caches()
+		print(f'Successfully uninstalled {self.name} for {getlogin()} on this machine.')
 
 	# ----------------
 	# Helper functions
@@ -417,7 +419,7 @@ Type=Application
 	def _run(self, *args):
 		logging.debug(args)
 		if self._modify_system:
-			cp = run(*args, capture_output = True)
+			cp = run(*args, check = False, capture_output = True)
 			if cp.returncode != 0:
 				raise RuntimeError(cp.stderr)
 
