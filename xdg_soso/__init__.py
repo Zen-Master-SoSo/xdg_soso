@@ -84,6 +84,7 @@ class XDGMime:
 			el = et.SubElement(elem, 'generic-icon')
 			el.attrib['name'] = module_name
 
+
 class XDGSetup:
 	"""
 	Installs your package as a userspace application on XDG compliant shells.
@@ -305,22 +306,24 @@ class XDGSetup:
 		files beneath the given directory name. This is used for debugging. If
 		"root_path" is given, no actual XDG commands will be issued.
 		"""
-		self._modify_system = root_path is None
 		if root_path:
 			self._root_path = Path(root_path)
+			self._modify_system = False
 		if self._application_icon:
 			copy2(self._application_icon, self.app_icon_file)
+			logging.debug(f'Copied application icon to "{self.app_icon_file}"')
 		self._make_desktop_file()
-		self._update_desktop_database()
 		if self._mime_types or self._custom_mime_type:
-			self.make_mime_xml_file()
+			self._make_mime_xml_file()
 			self._xdg_mime_install()
 			if self._custom_mime_type:
 				self._set_mime_default()
 		if self._file_icon:
 			copy2(self._file_icon, self.file_icon_file)
+			logging.debug(f'Copied file icon to "{self.file_icon_file}"')
 		if self._application_icon or self._file_icon:
 			self._update_icon_caches()
+		self._update_desktop_database()
 		print(f'Successfully installed {self.name} for {getlogin()} on this machine.')
 
 	def _make_desktop_file(self):
@@ -349,9 +352,10 @@ Type=Application
 				if self._custom_mime_type:
 					string = f'{self._custom_mime_type};' + string
 				fob.write(f'MimeType={string};\n')
+		logging.debug(f'Created desktop file "{self.desktop_file}"')
 		self.desktop_file.chmod(0o755)
 
-	def make_mime_xml_file(self):
+	def _make_mime_xml_file(self):
 		"""
 		Make a mime_type xml file.
 		"""
@@ -366,6 +370,7 @@ Type=Application
 		self._mime_xml_temp = Path(gettempdir()) / (self._xml_mime_name() + '.xml')
 		with open(self._mime_xml_temp, 'wb') as fob:
 			tree.write(fob, xml_declaration = True, encoding = 'utf-8')
+		logging.debug(f'Write mime xml file "{self._mime_xml_temp}"')
 		if not self._modify_system:
 			copy2(self._mime_xml_temp, self.mime_xml_file)
 
@@ -377,6 +382,7 @@ Type=Application
 			self._run([ 'xdg-mime', 'install', self._mime_xml_temp ])
 		else:
 			self._run([ 'xdg-mime', 'install', '--novendor', self._mime_xml_temp ])
+		logging.debug(f'Mimetype file should be found at "{self.mime_xml_file}"')
 		unlink(self._mime_xml_temp)
 
 	def _set_mime_default(self):
