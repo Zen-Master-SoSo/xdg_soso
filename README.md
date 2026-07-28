@@ -20,17 +20,34 @@ In your python application:
 from xdg_soso import XDGSetup
 ```
 
-Create an instance of XDGSetup:
+Create an instance of XDGSetup and install your application:
 
-```
+```python
 xdg = XDGSetup(__package__, "MyModule")
 xdg.comment = __doc__	# For example
-```
-
-Install your application:
-
-```
+[..set other attributes..]
 xdg.install()
+```
+
+A better way is to constuct a class which inherits from XDGSetup. That way, you
+can do an uninstall using the same class as you would use to do an install:
+
+```python
+class MyInstaller(XDGSetup):
+	def __init__():
+		super().__init__(__package__, "MyModule")
+		self.comment = __doc__	# For example
+		[..set other attributes..]
+
+installer = MyInstaller()
+installer.install()
+```
+
+And to uninstall:
+
+```python
+installer = MyInstaller()
+installer.uninstall()
 ```
 
 ## Attributes
@@ -41,15 +58,17 @@ idea to include an application icon, as well. There are two properties which
 you can use to set an application icon: "application_icon" and "generic_icon".
 (See below)
 
------
-
 The attributes which you can set include:
 
-* comment
+#### comment
+
+(str)
 
 What will be displayed in desktop applications like Dash or your file explorer.
 
-* keywords
+#### keywords
+
+(list of str)
 
 Makes it possible for the user to search for your application using Dash or other tools.
 
@@ -67,7 +86,9 @@ Screen, Security, Sequencer, Server, Settings, Slideshow, Stylus, Synthesizer, S
 Tablet, Task, Text, Theme, Trackball, Trackpad, Transform, Unity, User, Video,
 View, Viewer, Volume, WAV, Wacom, Wallpaper, Wireless, Zoom
 
-* categories
+#### categories
+
+(list of str)
 
 Used by some tools to create a hierarchical menu.
 
@@ -82,7 +103,9 @@ Security, Sequencer, Settings, Spreadsheet, System, TV, TerminalEmulator,
 TextEditor, Utilities, Utility, VectorGraphics, Video, Viewer, WordProcessor,
 XFCE
 
-* application_icon
+#### application_icon
+
+(str or Path)
 
 A file path to a custom icon which will be displayed in the task bar /
 switcher. For example:
@@ -92,7 +115,9 @@ xdg = XDGSetup('my_package', 'My Package Name')
 xdg.application_icon = join(dirname(__file__), 'application-icon.svg')
 ```
 
-* generic_icon
+#### generic_icon
+
+(str)
 
 The NAME of a generic icon which you want to be displayed in the task bar /
 switcher. Some generic icon names include:
@@ -107,11 +132,15 @@ xdg = XDGSetup('my_package', 'My Package Name')
 xdg.generic_icon = 'x-office-calendar'
 ```
 
-* mime_types
+#### mime_types
+
+(list of str)
 
 A list of XDGMime objects which define which mime_types to associate with your program.
 
-* file_icon
+#### file_icon
+
+(str or Path)
 
 The icon which will be used by the file manager to decorate files which should
 be associated with your application using the "mime_type" declared for your
@@ -124,13 +153,19 @@ In order to use this feature, you must decide on a mime_type name and set the
 ### Complete example:
 
 ```python
-xdg = XDGSetup('my_package', 'Name To Call It')
-xdg.comment = "A concise description of my project."
-xdg.mime_type = 'x-application/foo'
-xdg.glob_pattern = '*.foo'
-xdg.application_icon = join(dirname(__file__), 'application-icon.svg')
-xdg.file_icon = join(dirname(__file__), 'file-icon.svg')
-xdg.categories = ['Utilities']
-xdg.keywords = ['Foo', 'Player', 'Viewer']
-xdg.install()
+from pathlib import Path
+from xdg_soso import XDGSetup
+
+class FooInstaller(XDGSetup):
+	def __init__():
+		super().__init__(__package__, 'Name To Call It')
+		self.comment = "A concise description of my project."
+		self.mime_type = 'x-application/foo'
+		self.glob_pattern = '*.foo'
+		self.application_icon = Path(__file__).parent / 'res' / 'application-icon.svg'
+		self.file_icon = Path(__file__).parent / 'res' / 'file-icon.svg'
+		self.categories = ['Utilities']
+		self.keywords = ['Foo', 'Player', 'Viewer']
+
+FooInstaller().install()
 ```
