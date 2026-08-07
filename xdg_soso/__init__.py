@@ -283,8 +283,6 @@ class XDGSetup:
 
 	def _check_path(self, path):
 		if not path.parent.exists():
-			if self._modify_system:
-				raise SystemError(f'Required directory "{path.parent}" not found')
 			path.parent.mkdir(parents = True)
 		return path
 
