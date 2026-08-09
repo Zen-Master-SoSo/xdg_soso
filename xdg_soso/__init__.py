@@ -30,7 +30,7 @@ from xml.etree.ElementTree import Element
 from tempfile import gettempdir
 from subprocess import run
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 SVG = 'svg'
 PNG = 'png'
