@@ -32,14 +32,9 @@ from subprocess import run
 
 __version__ = "1.2.0"
 
+SVG = 'svg'
+PNG = 'png'
 
-def _check(attrib, value, type_, list_elem_type = None):
-	if not isinstance(value, type_):
-		raise ValueError(f'Incorrect type for "{attrib}": "{type(value).__name__}"')
-	if type_ is list and value:
-		for elem in value:
-			if not isinstance(elem, list_elem_type):
-				raise ValueError(f'Incorrect type for "{attrib}": "{type(elem).__name__}"')
 
 def is_xdg():
 	"""
@@ -49,6 +44,17 @@ def is_xdg():
 		if getenv(var):
 			return True
 	return run(['which', 'update-desktop-database'], check = False).returncode == 0
+
+def _check(attrib, value, type_, list_elem_type = None):
+	if not isinstance(value, type_):
+		raise ValueError(f'Incorrect type for "{attrib}": "{type(value).__name__}"')
+	if type_ is list and value:
+		for elem in value:
+			if not isinstance(elem, list_elem_type):
+				raise ValueError(f'Incorrect type for "{attrib}": "{type(elem).__name__}"')
+
+def _icon_suffix(fmt):
+	return '.svg' if fmt == SVG else '.png'
 
 
 class XDGMime:
@@ -100,17 +106,17 @@ class XDGSetup:
 		self._root_path = Path.home() / '.local' / 'share'
 		self._modify_system = True
 		# Properties:
-		self._comment = None
-		self._vendor_name = None
-		self._keywords = None
-		self._categories = None
-		self._application_icon = None
-		self._generic_icon = None
-		self._mime_types = []
-		self._custom_mime_type = None
-		self._file_icon = None
+		self.__comment = None
+		self.__vendor_name = None
+		self.__keywords = None
+		self.__categories = None
+		self.__mime_types = []
+		self.__custom_mime_type = None
+		self.__application_icons = {}
+		self.__generic_icon = None
+		self.__file_icons = {}
 		# Temp file:
-		self._mime_xml_temp = None
+		self.__mime_xml_temp = None
 
 	# ----------------------
 	# Properties set by user
@@ -120,12 +126,12 @@ class XDGSetup:
 		"""
 		What will be displayed in desktop applications like Dash or your file explorer.
 		"""
-		return self._comment
+		return self.__comment
 
 	@comment.setter
 	def comment(self, value):
 		_check('comment', value, str)
-		self._comment = value
+		self.__comment = value
 
 	@property
 	def vendor_name(self):
@@ -133,60 +139,68 @@ class XDGSetup:
 		A word or phrase, preferably your organizations name. The purpose of the vendor
 		prefix is to prevent name conflicts.
 		"""
-		return self._vendor_name
+		return self.__vendor_name
 
 	@vendor_name.setter
 	def vendor_name(self, value):
 		_check('vendor_name', value, str)
-		self._vendor_name = value
+		self.__vendor_name = value
 
 	@property
 	def keywords(self):
 		"""
 		Makes it possible for the user to search for your application using Dash or other tools.
 		"""
-		return self._keywords
+		return self.__keywords
 
 	@keywords.setter
 	def keywords(self, value):
 		_check('keywords', value, list, str)
-		self._keywords = value
+		self.__keywords = value
 
 	@property
 	def categories(self):
 		"""
 		Used by some tools to create a hierarchical menu.
 		"""
-		return self._categories
+		return self.__categories
 
 	@categories.setter
 	def categories(self, value):
 		_check('categories', value, list, str)
-		self._categories = value
+		self.__categories = value
 
 	@property
 	def application_icon(self):
 		"""
-		A file path to a custom icon which will be displayed in the task bar / switcher.
+		Paths to custom icons which will be displayed in the task bar / switcher.
+
+		You can set this property twice, once with a .png icon, and once with an .svg icon.
+
+		Alternatively, name both icons the same except for the extension and put them
+		in the same directory, and set this property to the name of either one without
+		the extension. This class will discover both.
+
+		Returns dict { SVG: Path, PNG: Path }
 		"""
-		return self._application_icon
+		return self.__application_icons
 
 	@application_icon.setter
 	def application_icon(self, value):
 		_check('application_icon', value, (str, Path))
-		self._application_icon = value
+		self.__application_icons.update(self._src_icon_dict(value))
 
 	@property
 	def generic_icon(self):
 		"""
 		The NAME of a generic icon which you want to be displayed in the task bar / switcher.
 		"""
-		return self._generic_icon
+		return self.__generic_icon
 
 	@generic_icon.setter
 	def generic_icon(self, value):
 		_check('generic_icon', value, (str, Path))
-		self._generic_icon = value
+		self.__generic_icon = value
 
 	@property
 	def mime_types(self):
@@ -194,12 +208,12 @@ class XDGSetup:
 		A list of XDGMime objects which your application may handle. XDG will associate
 		your application with all of the given mime_types.
 		"""
-		return self._mime_types
+		return self.__mime_types
 
 	@mime_types.setter
 	def mime_types(self, value):
 		_check('mime_types', value, list, XDGMime)
-		self._mime_types = value
+		self.__mime_types = value
 
 	@property
 	def custom_mime_type(self):
@@ -207,25 +221,33 @@ class XDGSetup:
 		An XDGMime object defining a mimetype that the system will open with your
 		program BY DEFAULT.
 		"""
-		return self._custom_mime_type
+		return self.__custom_mime_type
 
 	@custom_mime_type.setter
 	def custom_mime_type(self, value):
 		_check('custom_mime_type', value, XDGMime)
-		self._custom_mime_type = value
+		self.__custom_mime_type = value
 
 	@property
 	def file_icon(self):
 		"""
 		The icon which will be used by the file manager to decorate files which should
-		be associated with your application
+		be associated with your application.
+
+		You can set this property twice, once with a .png icon, and once with an .svg icon.
+
+		Alternatively, name both icons the same except for the extension and put them
+		in the same directory, and set this property to the name of either one without
+		the extension. This class will discover both.
+
+		Returns dict { SVG: Path, PNG: Path }
 		"""
-		return self._file_icon
+		return self.__file_icons
 
 	@file_icon.setter
 	def file_icon(self, value):
 		_check('file_icon', value, (str, Path))
-		self._file_icon = value
+		self.__file_icons.update(self._src_icon_dict(value))
 
 	# --------------------------------
 	# More property setting functions:
@@ -236,6 +258,20 @@ class XDGSetup:
 		"""
 		_check('mime_type', mime_type, XDGMime)
 		self.mime_types.append(mime_type)
+
+	# --------------------------------------
+	# Icon file discovery and disambiguation
+
+	def _src_icon_dict(self, value):
+		path = Path(value)
+		icons = {}
+		svg_icon = path.parent / (path.stem + '.svg')
+		png_icon = path.parent / (path.stem + '.png')
+		if svg_icon.exists():
+			icons[SVG] = svg_icon
+		if png_icon.exists():
+			icons[PNG] = png_icon
+		return icons
 
 	# -------------------------------------------
 	# Paths returned from standard user locations
@@ -249,22 +285,22 @@ class XDGSetup:
 		return self._check_path(self._root_path / 'applications' / (
 			self.module_name + '.desktop'))
 
-	@property
-	def app_icon_file(self):
+	def _application_icon_file(self, fmt):
 		"""
-		The target path of the application icon.
+		The target path of the application icon for the given format.
+		"fmt" may be one of the constants SVG or PNG.
 		"""
-		return self._check_path(self._icon_path() / 'apps' / (
-			self.module_name + Path(self._application_icon).suffix))
+		return self._check_path(self._user_icon_path(fmt) / 'apps' /
+			(self.module_name + _icon_suffix(fmt)))
 
-	@property
-	def file_icon_file(self):
+	def _file_icon_file(self, fmt):
 		"""
 		The target path of the file icon (icons used to decorate files which are
-		associated with your application in the file manager).
+		associated with your application in the file manager) for the given format.
+		"fmt" may be one of the constants SVG or PNG.
 		"""
-		return self._check_path(self._icon_path() / 'mimetypes' / (
-			str(self._custom_mime_type).replace('/', '-') + Path(self._file_icon).suffix))
+		return self._check_path(self._user_icon_path(fmt) / 'mimetypes' / (
+			str(self.__custom_mime_type).replace('/', '-') + _icon_suffix(fmt)))
 
 	@property
 	def mime_xml_file(self):
@@ -276,10 +312,10 @@ class XDGSetup:
 
 	def _xml_mime_name(self):
 		module_name = self.module_name.replace('/', '-')
-		return f'{self._vendor_name}-{module_name}' if self._vendor_name else module_name
+		return f'{self.__vendor_name}-{module_name}' if self.__vendor_name else module_name
 
-	def _icon_path(self):
-		return self._root_path / 'icons' / 'hicolor' / 'scalable'
+	def _user_icon_path(self, fmt):
+		return self._root_path / 'icons' / 'hicolor' / ('scalable' if fmt == SVG else '48x48')
 
 	def _check_path(self, path):
 		if not path.parent.exists():
@@ -307,19 +343,23 @@ class XDGSetup:
 		if root_path:
 			self._root_path = Path(root_path)
 			self._modify_system = False
-		if self._application_icon:
-			copy2(self._application_icon, self.app_icon_file)
-			logging.debug(f'Copied application icon to "{self.app_icon_file}"')
+		for fmt, icon_path in self.__application_icons.items():
+			if icon_path.exists():
+				target = self._application_icon_file(fmt)
+				copy2(icon_path, target)
+				logging.debug('Copied application icon to "%s"', target)
 		self._make_desktop_file()
-		if self._mime_types or self._custom_mime_type:
+		if self.__mime_types or self.__custom_mime_type:
 			self._make_mime_xml_file()
 			self._xdg_mime_install()
-			if self._custom_mime_type:
+			if self.__custom_mime_type:
 				self._set_mime_default()
-		if self._file_icon:
-			copy2(self._file_icon, self.file_icon_file)
-			logging.debug(f'Copied file icon to "{self.file_icon_file}"')
-		if self._application_icon or self._file_icon:
+		for fmt, icon_path in self.__file_icons.items():
+			if icon_path.exists():
+				target = self._file_icon_file(fmt)
+				copy2(icon_path, target)
+				logging.debug('Copied file icon to "%s"', target)
+		if self.__application_icons or self.__file_icons:
 			self._update_icon_caches()
 		self._update_desktop_database()
 		print(f'Successfully installed {self.name} for {getlogin()} on this machine.')
@@ -334,23 +374,23 @@ Terminal=false
 Type=Application
 """)
 			if self.comment:
-				fob.write(f'Comment={self._comment}\n')
-			if self._application_icon:
+				fob.write(f'Comment={self.__comment}\n')
+			if self.__application_icons:
 				fob.write(f'Icon={self.module_name}\n')
-			if self._generic_icon:
-				fob.write(f'Icon={self._generic_icon}\n')
-			if self._keywords:
-				string = ';'.join(self._keywords) + ';'
+			if self.__generic_icon:
+				fob.write(f'Icon={self.__generic_icon}\n')
+			if self.__keywords:
+				string = ';'.join(self.__keywords) + ';'
 				fob.write(f'Keywords={string}\n')
-			if self._categories:
-				string = ';'.join(self._categories) + ';'
+			if self.__categories:
+				string = ';'.join(self.__categories) + ';'
 				fob.write(f'Categories={string}\n')
-			if self._mime_types or self._custom_mime_type:
-				string = ';'.join(str(mime_type) for mime_type in self._mime_types)
-				if self._custom_mime_type:
-					string = f'{self._custom_mime_type};' + string
+			if self.__mime_types or self.__custom_mime_type:
+				string = ';'.join(str(mime_type) for mime_type in self.__mime_types)
+				if self.__custom_mime_type:
+					string = f'{self.__custom_mime_type};' + string
 				fob.write(f'MimeType={string};\n')
-		logging.debug(f'Created desktop file "{self.desktop_file}"')
+		logging.debug('Created desktop file "%s"', self.desktop_file)
 		self.desktop_file.chmod(0o755)
 
 	def _make_mime_xml_file(self):
@@ -361,30 +401,30 @@ Type=Application
 		tree = et.ElementTree(et.fromstring(
 			'<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info"/>'))
 		root = tree.getroot()
-		if self._custom_mime_type:
-			self._custom_mime_type.append_xml_elem(root, self.module_name)
-		for mime_type in self._mime_types:
+		if self.__custom_mime_type:
+			self.__custom_mime_type.append_xml_elem(root, self.module_name)
+		for mime_type in self.__mime_types:
 			mime_type.append_xml_elem(root)
-		self._mime_xml_temp = Path(gettempdir()) / (self._xml_mime_name() + '.xml')
-		with open(self._mime_xml_temp, 'wb') as fob:
+		self.__mime_xml_temp = Path(gettempdir()) / (self._xml_mime_name() + '.xml')
+		with open(self.__mime_xml_temp, 'wb') as fob:
 			tree.write(fob, xml_declaration = True, encoding = 'utf-8')
-		logging.debug(f'Write mime xml file "{self._mime_xml_temp}"')
+		logging.debug('Write mime xml file "%s"', self.__mime_xml_temp)
 		if not self._modify_system:
-			copy2(self._mime_xml_temp, self.mime_xml_file)
+			copy2(self.__mime_xml_temp, self.mime_xml_file)
 
 	# ------------
 	# XDG commands
 
 	def _xdg_mime_install(self):
-		if self._vendor_name:
-			self._run([ 'xdg-mime', 'install', self._mime_xml_temp ])
+		if self.__vendor_name:
+			self._run([ 'xdg-mime', 'install', self.__mime_xml_temp ])
 		else:
-			self._run([ 'xdg-mime', 'install', '--novendor', self._mime_xml_temp ])
-		logging.debug(f'Mimetype file should be found at "{self.mime_xml_file}"')
-		unlink(self._mime_xml_temp)
+			self._run([ 'xdg-mime', 'install', '--novendor', self.__mime_xml_temp ])
+		logging.debug('Mimetype file should be found at "%s"', self.mime_xml_file)
+		unlink(self.__mime_xml_temp)
 
 	def _set_mime_default(self):
-		self._run([ 'xdg-mime', 'default', self.desktop_file.name, str(self._custom_mime_type) ])
+		self._run([ 'xdg-mime', 'default', self.desktop_file.name, str(self.__custom_mime_type) ])
 
 	def _update_desktop_database(self):
 		self._run([ 'update-desktop-database', self._shared_dir('applications') ])
@@ -404,12 +444,11 @@ Type=Application
 			self._run([ 'xdg-mime', 'uninstall', self.mime_xml_file])
 		except RuntimeError as err:
 			logging.error(err)
-		if self._application_icon and self.app_icon_file.exists():
-			unlink(self.app_icon_file)
-		if self._file_icon and self.file_icon_file.exists():
-			unlink(self.file_icon_file)
-		if self.desktop_file.exists():
-			unlink(self.desktop_file)
+		for fmt in self.__application_icons:
+			self._application_icon_file(fmt).unlink()
+		for fmt in self.__file_icons:
+			self._file_icon_file(fmt).unlink()
+		self.desktop_file.unlink()
 		self._update_mime_database()
 		self._update_icon_caches()
 		print(f'Successfully uninstalled {self.name} for {getlogin()} on this machine.')
