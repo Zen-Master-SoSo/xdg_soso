@@ -6,6 +6,12 @@ license = {file = "LICENSE"}
 classifiers = ["License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"]
 dynamic = ["version", "description"]
 
+[external]
+dependencies = [
+  "pkg:generic/desktop-file-utils; platform_system=='Linux'",
+  "pkg:generic/xdg-utils; platform_system=='Linux'"
+]
+
 [project.urls]
 Home = "https://github.com/Zen-Master-SoSo/xdg_soso"
 
